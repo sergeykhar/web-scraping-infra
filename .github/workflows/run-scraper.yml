@@ -1,0 +1,83 @@
+name: Run Web Scraper
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_scraper:
+        description: 'Run the scraper after infrastructure is up'
+        required: true
+        default: true
+        type: boolean
+
+env:
+  TF_WORKING_DIR: environments/prod
+  AWS_REGION: eu-central-1
+
+jobs:
+  spin-up-and-scrape:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.0
+          terraform_wrapper: false
+
+      - name: Terraform Init
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform init
+
+      - name: Terraform Apply
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform apply -auto-approve
+
+      - name: Get EC2 IP
+        id: ec2
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          EC2_IP=$(terraform output -raw ec2_public_ip)
+          echo "ip=$EC2_IP" >> $GITHUB_OUTPUT
+          echo "EC2 Instance IP: $EC2_IP"
+
+      - name: Wait for EC2 to be ready
+        run: |
+          echo "Waiting 60 seconds for EC2 instance to initialize..."
+          sleep 60
+
+      - name: Run Scraper via SSH
+        if: ${{ inputs.run_scraper }}
+        env:
+          EC2_IP: ${{ steps.ec2.outputs.ip }}
+          SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+        run: |
+          # Set up SSH key
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          
+          # Add host to known hosts
+          ssh-keyscan -H $EC2_IP >> ~/.ssh/known_hosts 2>/dev/null
+          
+          # Run scraper
+          ssh -o StrictHostKeyChecking=no ec2-user@$EC2_IP '/home/ec2-user/scripts/run-scraper.sh'
+
+      - name: Terraform Destroy
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform destroy -auto-approve
+        
+      - name: Summary
+        run: |
+          echo "## Scraping Job Completed! 🎉" >> $GITHUB_STEP_SUMMARY
+          echo "- EC2 instance was created, ran the scraper, and was destroyed" >> $GITHUB_STEP_SUMMARY
+          echo "- Data uploaded to: s3://eu-central-1-web-scraping-data/raw/players/" >> $GITHUB_STEP_SUMMARY
