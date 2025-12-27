@@ -1,3 +1,32 @@
+# Policy: GitHub Actions user ECR push access
+resource "aws_iam_policy" "github_actions_ecr_push" {
+  name        = "github-actions-ecr-push"
+  description = "Allow GitHub Actions to push images to ECR"
+  policy      = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "ecr:GetAuthorizationToken",
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:CompleteLayerUpload",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:InitiateLayerUpload",
+          "ecr:PutImage",
+          "ecr:UploadLayerPart"
+        ]
+        Resource = var.ecr_repository_arn
+      }
+    ]
+  })
+}
+
+# Attach policy to GitHub Actions user
+resource "aws_iam_user_policy_attachment" "github_actions_ecr_push_attach" {
+  user       = "github-actions-web-scraping-ecr"
+  policy_arn = aws_iam_policy.github_actions_ecr_push.arn
+}
 # IAM Module - Creates roles and policies for EC2
 
 # EC2 Instance Role

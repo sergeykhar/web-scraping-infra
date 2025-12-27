@@ -7,7 +7,7 @@ variable "aws_region" {
 variable "state_bucket_name" {
   description = "S3 bucket name for Terraform state"
   type        = string
-  default     = "skharybin-terraform-state"
+  default     = "skharybin-web-scraping-tf-state"
 }
 
 variable "lock_table_name" {

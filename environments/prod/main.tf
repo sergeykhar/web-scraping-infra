@@ -10,7 +10,7 @@ terraform {
 
   # Terraform state backend (run bootstrap first!)
   backend "s3" {
-    bucket         = "skharybin-terraform-state"
+    bucket         = "skharybin-web-scraping-tf-state"
     key            = "web-scraping/prod/terraform.tfstate"
     region         = "eu-central-1"
     encrypt        = true

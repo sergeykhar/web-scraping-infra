@@ -13,4 +13,4 @@ ec2_instance_type = "t3.micro"
 ec2_key_name      = "web-scraping-key"  # Create this key pair in AWS console first
 
 # SSH access - replace with your IP
-allowed_ssh_cidr  = "0.0.0.0/0"  # CHANGE THIS to your IP, e.g., "203.0.113.50/32"
+allowed_ssh_cidr  = "31.183.240.23/32"  # CHANGE THIS to your IP, e.g., "203.0.113.50/32"
