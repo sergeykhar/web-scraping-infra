@@ -27,3 +27,8 @@ output "ssh_command" {
   description = "SSH command to connect to EC2"
   value       = "ssh -i ~/.ssh/${var.ec2_key_name}.pem ec2-user@${module.ec2.public_ip}"
 }
+
+output "instance_id" {
+  description = "EC2 instance ID"
+  value       = module.ec2.instance_id
+}
