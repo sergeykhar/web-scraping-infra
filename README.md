@@ -123,7 +123,31 @@ web-scraping-infra/
 |--------|-------------|
 | `AWS_ACCESS_KEY_ID` | AWS access key |
 | `AWS_SECRET_ACCESS_KEY` | AWS secret key |
-| `EC2_SSH_PRIVATE_KEY` | SSH private key for EC2 access |
+| `EC2_SSH_PRIVATE_KEY` | SSH private key for EC2 access (not required if using SSM) |
+
+## CI Integration (recommended)
+
+This project runs the scraper on an EC2 instance via GitHub Actions. The recommended CI approach uses AWS Systems Manager (SSM) instead of SSH — this avoids storing SSH keys and works with instances in private subnets.
+
+- What the workflow does:
+    - `terraform apply` creates the EC2 instance and related resources.
+    - The `run-scraper.yml` workflow uses Terraform output `instance_id` and calls `aws ssm send-command` to execute `/home/ec2-user/scripts/run-scraper.sh` on the instance.
+    - The workflow polls `ssm get-command-invocation` until the command completes and then fetches stdout/stderr.
+
+- Required GitHub Secrets for CI (SSM flow):
+    - `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` — credentials for a GitHub Actions IAM user with permissions below.
+
+- Minimal IAM permissions for GitHub Actions user (example):
+    - `ssm:SendCommand`, `ssm:GetCommandInvocation`, `ssm:ListCommands`, `ssm:ListCommandInvocations`
+    - `ec2:DescribeInstances` (optional, if you need to look up instance metadata)
+    - `ecr:*` and `s3:*` permissions if the workflow also builds/pushes images or uploads artifacts
+
+- Notes:
+    - The EC2 instance must have the `AmazonSSMManagedInstanceCore` policy attached (this repo's Terraform attaches it).
+    - The VPC must allow SSM traffic (we add interface VPC endpoints in the VPC module to avoid needing a NAT Gateway).
+    - Once SSM is used, you can remove `EC2_SSH_PRIVATE_KEY` from GitHub Secrets and skip SSH steps in workflows.
+
+If you want, I can tighten the IAM policies created by Terraform to scope them to fewer resources (recommended for production). 
 
 ## Cost Optimization
 
