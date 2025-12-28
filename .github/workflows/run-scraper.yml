@@ -67,9 +67,18 @@ jobs:
               echo "Instance is running"
               break
             fi
+
+            if [ "$STATE" = "stopped" ]; then
+              echo "Instance is stopped — attempting to start it"
+              aws ec2 start-instances --instance-ids "$INSTANCE_ID" --region "$AWS_REGION"
+            fi
+
             if [ "$waited" -ge "$MAX_WAIT" ]; then
               echo "Timed out waiting for instance to be running"
-              aws ec2 describe-instances --instance-ids "$INSTANCE_ID" --region "$AWS_REGION"
+              echo "Instance describe:" 
+              aws ec2 describe-instances --instance-ids "$INSTANCE_ID" --region "$AWS_REGION" --output json
+              echo "Console output:" 
+              aws ec2 get-console-output --instance-id "$INSTANCE_ID" --region "$AWS_REGION" --output text || true
               exit 1
             fi
             sleep $INTERVAL
@@ -88,12 +97,25 @@ jobs:
             fi
             if [ "$waited" -ge "$MAX_WAIT_SSM" ]; then
               echo "Timed out waiting for SSM Agent to be Online"
+              echo "Instance describe:" 
+              aws ec2 describe-instances --instance-ids "$INSTANCE_ID" --region "$AWS_REGION" --output json
+              echo "Console output:" 
+              aws ec2 get-console-output --instance-id "$INSTANCE_ID" --region "$AWS_REGION" --output text || true
+              echo "SSM instance-information:"
               aws ssm describe-instance-information --region "$AWS_REGION"
               exit 1
             fi
             sleep $INTERVAL
             waited=$((waited + INTERVAL))
           done
+
+          # Print instance and SSM info for debugging in the Actions log
+          echo "Instance info:"
+          aws ec2 describe-instances --instance-ids "$INSTANCE_ID" --region "$AWS_REGION" --output json || true
+          echo "SSM info:"
+          aws ssm describe-instance-information --filters Key=InstanceIds,Values=$INSTANCE_ID --region "$AWS_REGION" --output json || true
+          echo "Console output:"
+          aws ec2 get-console-output --instance-id "$INSTANCE_ID" --region "$AWS_REGION" --output text || true
 
       - name: Run Scraper via SSM
         if: ${{ inputs.run_scraper }}
