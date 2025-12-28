@@ -50,10 +50,50 @@ jobs:
           echo "instance_id=$INSTANCE_ID" >> $GITHUB_OUTPUT
           echo "EC2 Instance ID: $INSTANCE_ID"
 
-      - name: Wait for EC2 to be ready
+      - name: Wait for EC2 to be running and SSM to register
+        env:
+          INSTANCE_ID: ${{ steps.ec2.outputs.instance_id }}
+          AWS_REGION: ${{ env.AWS_REGION }}
         run: |
-          echo "Waiting 30 seconds for EC2 instance to initialize..."
-          sleep 30
+          set -euo pipefail
+          echo "Waiting for EC2 instance $INSTANCE_ID to enter 'running' state..."
+          MAX_WAIT=180
+          INTERVAL=15
+          waited=0
+          while true; do
+            STATE=$(aws ec2 describe-instances --instance-ids "$INSTANCE_ID" --region "$AWS_REGION" --output text --query 'Reservations[0].Instances[0].State.Name' || true)
+            echo "EC2 state: ${STATE:-unknown}"
+            if [ "$STATE" = "running" ]; then
+              echo "Instance is running"
+              break
+            fi
+            if [ "$waited" -ge "$MAX_WAIT" ]; then
+              echo "Timed out waiting for instance to be running"
+              aws ec2 describe-instances --instance-ids "$INSTANCE_ID" --region "$AWS_REGION"
+              exit 1
+            fi
+            sleep $INTERVAL
+            waited=$((waited + INTERVAL))
+          done
+
+          echo "Waiting for SSM Agent to report 'Online'..."
+          MAX_WAIT_SSM=300
+          waited=0
+          while true; do
+            PING=$(aws ssm describe-instance-information --filters Key=InstanceIds,Values=$INSTANCE_ID --region "$AWS_REGION" --output text --query 'InstanceInformationList[0].PingStatus' || true)
+            echo "SSM PingStatus: ${PING:-unknown}"
+            if [ "$PING" = "Online" ]; then
+              echo "SSM Agent is online"
+              break
+            fi
+            if [ "$waited" -ge "$MAX_WAIT_SSM" ]; then
+              echo "Timed out waiting for SSM Agent to be Online"
+              aws ssm describe-instance-information --region "$AWS_REGION"
+              exit 1
+            fi
+            sleep $INTERVAL
+            waited=$((waited + INTERVAL))
+          done
 
       - name: Run Scraper via SSM
         if: ${{ inputs.run_scraper }}
