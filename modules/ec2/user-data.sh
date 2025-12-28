@@ -95,4 +95,24 @@ chown -R ec2-user:ec2-user /home/ec2-user/scripts
 chown -R ec2-user:ec2-user /home/ec2-user/output
 chown -R ec2-user:ec2-user /home/ec2-user/logs
 
+# Create a small systemd service to ensure permissions persist on reboot
+cat > /etc/systemd/system/scraper-perms.service <<'UNIT'
+[Unit]
+Description=Ensure scraper script permissions
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/chown -R ec2-user:ec2-user /home/ec2-user/scripts /home/ec2-user/output /home/ec2-user/logs
+ExecStart=/bin/chmod +x /home/ec2-user/scripts/run-scraper.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+# Reload systemd and enable the service so it runs at boot
+systemctl daemon-reload
+systemctl enable --now scraper-perms.service || true
+
 echo "User-data script completed at $(date)"

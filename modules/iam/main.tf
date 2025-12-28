@@ -27,6 +27,32 @@ resource "aws_iam_user_policy_attachment" "github_actions_ecr_push_attach" {
   user       = "github-actions-web-scraping-ecr"
   policy_arn = aws_iam_policy.github_actions_ecr_push.arn
 }
+
+# Policy: Allow GitHub Actions user to invoke SSM commands and read results
+resource "aws_iam_policy" "github_actions_ssm_invoke" {
+  name        = "github-actions-ssm-invoke"
+  description = "Allow GitHub Actions to run SSM commands and read invocation results"
+  policy      = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Action = [
+          "ssm:SendCommand",
+          "ssm:GetCommandInvocation",
+          "ssm:ListCommands",
+          "ssm:ListCommandInvocations"
+        ],
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_user_policy_attachment" "github_actions_ssm_attach" {
+  user       = "github-actions-web-scraping-ecr"
+  policy_arn = aws_iam_policy.github_actions_ssm_invoke.arn
+}
 # IAM Module - Creates roles and policies for EC2
 
 # EC2 Instance Role
@@ -125,4 +151,10 @@ resource "aws_iam_role_policy" "cloudwatch_logs" {
 resource "aws_iam_instance_profile" "ec2_profile" {
   name = "${var.project_name}-${var.environment}-ec2-profile"
   role = aws_iam_role.ec2_role.name
+}
+
+# Attach managed policy for SSM (allow SSM Session Manager / Run Command)
+resource "aws_iam_role_policy_attachment" "ssm_managed_attach" {
+  role       = aws_iam_role.ec2_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
